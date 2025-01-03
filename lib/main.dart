@@ -1,125 +1,143 @@
 import 'package:flutter/material.dart';
 
+/// Entrypoint of the application.
 void main() {
   runApp(const MyApp());
 }
 
+/// [Widget] building the [MaterialApp].
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
-  // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Flutter Demo',
-      theme: ThemeData(
-        // This is the theme of your application.
-        //
-        // TRY THIS: Try running your application with "flutter run". You'll see
-        // the application has a purple toolbar. Then, without quitting the app,
-        // try changing the seedColor in the colorScheme below to Colors.green
-        // and then invoke "hot reload" (save your changes or press the "hot
-        // reload" button in a Flutter-supported IDE, or press "r" if you used
-        // the command line to start the app).
-        //
-        // Notice that the counter didn't reset back to zero; the application
-        // state is not lost during the reload. To reset the state, use hot
-        // restart instead.
-        //
-        // This works for code too, not just values: Most code changes can be
-        // tested with just a hot reload.
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
-        useMaterial3: true,
+      home: Scaffold(
+        body: Center(
+          child: Dock(
+            items: const [
+              Icons.person,
+              Icons.message,
+              Icons.call,
+              Icons.camera,
+              Icons.photo,
+            ],
+            builder: (e, scale) {
+              return AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                width: 48 * scale,
+                height: 48 * scale,
+                margin: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(8),
+                  color: Colors.primaries[e.hashCode % Colors.primaries.length],
+                  boxShadow: scale > 1
+                      ? [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.3),
+                      blurRadius: 10,
+                      spreadRadius: 1,
+                      offset: const Offset(0, 5),
+                    ),
+                  ]
+                      : null,
+                ),
+                child: Center(
+                  child: Icon(
+                    e,
+                    color: Colors.white,
+                    size: 24 * scale,
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
       ),
-      home: const MyHomePage(title: 'Flutter Demo Home Page'),
     );
   }
 }
 
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
+/// Dock of the reorderable [items].
+class Dock<T> extends StatefulWidget {
+  const Dock({
+    super.key,
+    this.items = const [],
+    required this.builder,
+  });
 
-  // This widget is the home page of your application. It is stateful, meaning
-  // that it has a State object (defined below) that contains fields that affect
-  // how it looks.
+  /// Initial [T] items to put in this [Dock].
+  final List<T> items;
 
-  // This class is the configuration for the state. It holds the values (in this
-  // case the title) provided by the parent (in this case the App widget) and
-  // used by the build method of the State. Fields in a Widget subclass are
-  // always marked "final".
-
-  final String title;
+  /// Builder building the provided [T] item with its scale.
+  final Widget Function(T, double scale) builder;
 
   @override
-  State<MyHomePage> createState() => _MyHomePageState();
+  State<Dock<T>> createState() => _DockState<T>();
 }
 
-class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
+/// State of the [Dock] used to manipulate the [_items].
+class _DockState<T> extends State<Dock<T>> {
+  /// [T] items being manipulated.
+  late final List<T> _items = widget.items.toList();
 
-  void _incrementCounter() {
-    setState(() {
-      // This call to setState tells the Flutter framework that something has
-      // changed in this State, which causes it to rerun the build method below
-      // so that the display can reflect the updated values. If we changed
-      // _counter without calling setState(), then the build method would not be
-      // called again, and so nothing would appear to happen.
-      _counter++;
-    });
-  }
+  /// Index of the currently active drag.
+  int? _activeDragIndex;
 
   @override
   Widget build(BuildContext context) {
-    // This method is rerun every time setState is called, for instance as done
-    // by the _incrementCounter method above.
-    //
-    // The Flutter framework has been optimized to make rerunning build methods
-    // fast, so that you can just rebuild anything that needs updating rather
-    // than having to individually change instances of widgets.
-    return Scaffold(
-      appBar: AppBar(
-        // TRY THIS: Try changing the color here to a specific color (to
-        // Colors.amber, perhaps?) and trigger a hot reload to see the AppBar
-        // change color while the other colors stay the same.
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        // Here we take the value from the MyHomePage object that was created by
-        // the App.build method, and use it to set our appbar title.
-        title: Text(widget.title),
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(8),
+        color: Colors.black12,
       ),
-      body: Center(
-        // Center is a layout widget. It takes a single child and positions it
-        // in the middle of the parent.
-        child: Column(
-          // Column is also a layout widget. It takes a list of children and
-          // arranges them vertically. By default, it sizes itself to fit its
-          // children horizontally, and tries to be as tall as its parent.
-          //
-          // Column has various properties to control how it sizes itself and
-          // how it positions its children. Here we use mainAxisAlignment to
-          // center the children vertically; the main axis here is the vertical
-          // axis because Columns are vertical (the cross axis would be
-          // horizontal).
-          //
-          // TRY THIS: Invoke "debug painting" (choose the "Toggle Debug Paint"
-          // action in the IDE, or press "p" in the console), to see the
-          // wireframe for each widget.
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            const Text(
-              'You have pushed the button this many times:',
-            ),
-            Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headlineMedium,
-            ),
-          ],
-        ),
+      padding: const EdgeInsets.all(4),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: List.generate(_items.length, (index) {
+          final item = _items[index];
+          final isActive = _activeDragIndex == index;
+          final scale = _activeDragIndex != null
+              ? _getScaleForIndex(index)
+              : 1.0; // Scale nearby items.
+
+          return GestureDetector(
+            key: ValueKey(item),
+            onLongPressStart: (_) {
+              setState(() => _activeDragIndex = index);
+            },
+            onLongPressMoveUpdate: (details) {
+              _updatePosition(details.localPosition.dx, index);
+            },
+            onLongPressEnd: (_) {
+              setState(() => _activeDragIndex = null);
+            },
+            child: widget.builder(item, scale),
+          );
+        }),
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
-      ), // This trailing comma makes auto-formatting nicer for build methods.
     );
+  }
+
+  /// Calculate scale based on distance from active item.
+  double _getScaleForIndex(int index) {
+    if (_activeDragIndex == null) return 1.0;
+
+    final distance = (index - _activeDragIndex!).abs();
+    if (distance == 0) return 1.5; // Active item.
+    if (distance == 1) return 1.2; // Nearby item.
+    return 1.0; // Other items.
+  }
+
+  /// Update the position of items based on drag.
+  void _updatePosition(double dx, int currentIndex) {
+    final newIndex = (dx / 56).clamp(0, _items.length - 1).toInt();
+    if (newIndex != currentIndex) {
+      setState(() {
+        final item = _items.removeAt(currentIndex);
+        _items.insert(newIndex, item);
+        _activeDragIndex = newIndex;
+      });
+    }
   }
 }
